@@ -1,3 +1,9 @@
 노트북에서 파일 생성합니다
 commit 은 가상서버에 파일을 올리는것 입니다.
 push 는 가상서버 변화를 git에 반영하는 것입니다.
+
+AI 에이전트 자동화 실무 양성과정
+
+수업관련 자료 및 정리 문서
+https://buly.kr/BTRgzLO
+https://naver.me/FWT0ZnZ6
