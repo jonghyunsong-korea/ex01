@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>한국 로또 번호 생성기</title>
+    <style>
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f8f9fa;
+            color: #212529;
+        }
+        h1 {
+            color: #343a40;
+            margin-bottom: 40px;
+            font-weight: 800;
+        }
+        .lotto-container {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 40px;
+            min-height: 80px; 
+            align-items: center;
+        }
+        .ball {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: 800;
+            color: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+            opacity: 0;
+            transform: scale(0.5) translateY(20px);
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .ball.show {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+        .plus-sign {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            font-weight: 800;
+            color: #adb5bd;
+            opacity: 0;
+            transform: scale(0.5);
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .plus-sign.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
+        /* 로또공 공식 색상 매칭 */
+        .color-yellow { background: linear-gradient(135deg, #fbc531, #e1b12c); } /* 1~10 */
+        .color-blue { background: linear-gradient(135deg, #0097e6, #00a8ff); } /* 11~20 */
+        .color-red { background: linear-gradient(135deg, #e84118, #c23616); } /* 21~30 */
+        .color-gray { background: linear-gradient(135deg, #7f8fa6, #718093); } /* 31~40 */
+        .color-green { background: linear-gradient(135deg, #4cd137, #44bd32); } /* 41~45 */
+        
+        button {
+            padding: 16px 48px;
+            font-size: 20px;
+            font-weight: bold;
+            color: white;
+            background-color: #212529;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+        }
+        button:hover {
+            background-color: #343a40;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        button:active {
+            transform: translateY(1px);
+        }
+        
+        .history {
+            margin-top: 50px;
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+        }
+        .history h2 {
+            font-size: 18px;
+            color: #6c757d;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+        }
+        .history-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .history-item {
+            background-color: white;
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            font-size: 18px;
+            font-weight: bold;
+            color: #495057;
+            letter-spacing: 3px;
+            transition: background-color 0.2s;
+        }
+        .history-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        /* 스크롤바 커스텀 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ced4da; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #adb5bd; 
+        }
+    </style>
+</head>
+<body>
+
+    <h1>한국 로또 번호 생성기</h1>
+
+    <div class="lotto-container" id="lotto-container">
+        <!-- 생성된 번호가 여기에 표시됩니다 -->
+    </div>
+
+    <button onclick="generateLotto()">번호 뽑기</button>
+
+    <div class="history" id="history-section" style="display: none;">
+        <h2>이전 생성 내역</h2>
+        <ul class="history-list" id="history-list"></ul>
+    </div>
+
+    <script>
+        // 번호에 따른 색상 클래스 반환
+        function getBallColorClass(number) {
+            if (number >= 1 && number <= 10) return 'color-yellow';
+            if (number >= 11 && number <= 20) return 'color-blue';
+            if (number >= 21 && number <= 30) return 'color-red';
+            if (number >= 31 && number <= 40) return 'color-gray';
+            if (number >= 41 && number <= 45) return 'color-green';
+            return '';
+        }
+
+        function generateLotto() {
+            const container = document.getElementById('lotto-container');
+            const historyList = document.getElementById('history-list');
+            const historySection = document.getElementById('history-section');
+            
+            // 기존 공 초기화
+            container.innerHTML = '';
+            
+            // 1~45 중 중복되지 않는 7개의 번호 생성 (6개 메인 + 1개 보너스)
+            const numbers = new Set();
+            while(numbers.size < 7) {
+                numbers.add(Math.floor(Math.random() * 45) + 1);
+            }
+            
+            const numbersArray = Array.from(numbers);
+            // 앞의 6개는 메인 번호로 사용하고 오름차순 정렬, 마지막 1개는 보너스 번호
+            const mainNumbers = numbersArray.slice(0, 6).sort((a, b) => a - b);
+            const bonusNumber = numbersArray[6];
+            
+            const displayElements = [];
+            
+            // 메인 번호 공 생성
+            mainNumbers.forEach((num) => {
+                const ball = document.createElement('div');
+                ball.className = `ball ${getBallColorClass(num)}`;
+                ball.textContent = num;
+                displayElements.push(ball);
+            });
+            
+            // 플러스 기호 생성
+            const plus = document.createElement('div');
+            plus.className = 'plus-sign';
+            plus.textContent = '+';
+            displayElements.push(plus);
+            
+            // 보너스 번호 공 생성
+            const bonusBall = document.createElement('div');
+            bonusBall.className = `ball ${getBallColorClass(bonusNumber)}`;
+            bonusBall.textContent = bonusNumber;
+            displayElements.push(bonusBall);
+
+            // 화면에 추가 및 애니메이션
+            displayElements.forEach((el, index) => {
+                container.appendChild(el);
+                setTimeout(() => {
+                    el.classList.add('show');
+                }, index * 120);
+            });
+
+            // 생성 내역에 추가 (애니메이션이 끝날 즈음 추가되도록)
+            setTimeout(() => {
+                historySection.style.display = 'block';
+                const historyItem = document.createElement('li');
+                historyItem.className = 'history-item';
+                
+                const mainText = mainNumbers.map(n => String(n).padStart(2, '0')).join(', ');
+                const bonusText = String(bonusNumber).padStart(2, '0');
+                
+                // 보너스 번호는 색상을 다르게 주어 시각적으로 구분
+                historyItem.innerHTML = `${mainText} <span style="color:#adb5bd; margin: 0 5px;">+</span> <span style="color:#e84118;">${bonusText}</span>`;
+                historyList.insertBefore(historyItem, historyList.firstChild);
+            }, displayElements.length * 120 + 300);
+        }
+    </script>
+</body>
+</html>

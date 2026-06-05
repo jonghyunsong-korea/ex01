@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>연예인 사진 검색</title>
+    <style>
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+            background-color: #f0f4f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: white;
+            padding: 40px 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 25px;
+            font-size: 24px;
+        }
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        input:focus {
+            border-color: #5c7cfa;
+        }
+        button {
+            background-color: #5c7cfa;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        button:hover {
+            background-color: #4c6ef5;
+        }
+        #photo-container {
+            margin-top: 30px;
+            min-height: 250px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            border: 2px dashed #eee;
+            border-radius: 12px;
+            padding: 20px;
+            gap: 20px;
+        }
+        img {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: none;
+            object-fit: cover;
+        }
+        #official-link {
+            display: none;
+            background-color: #f1f3f5;
+            color: #495057;
+            padding: 8px 20px;
+            border-radius: 20px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        #official-link:hover {
+            background-color: #e9ecef;
+            color: #212529;
+        }
+        #profile-desc {
+            display: none;
+            text-align: left;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #495057;
+            background-color: #f8f9fa;
+            padding: 15px 20px;
+            border-radius: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            border-left: 4px solid #5c7cfa;
+        }
+        .message {
+            color: #888;
+            font-size: 15px;
+        }
+        .error {
+            color: #fa5252;
+            margin-top: 10px;
+        }
+        .loading {
+            color: #5c7cfa;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 연예인 검색</h1>
+        <div class="search-box">
+            <input type="text" id="celeb-name" placeholder="예: 유재석, 아이유" onkeypress="handleKeyPress(event)">
+            <button onclick="searchPhoto()">검색</button>
+        </div>
+        <div id="photo-container">
+            <p id="message" class="message">이름을 검색하면 사진과 프로필이 나타납니다.</p>
+            <!-- 사진 위 공식 홈페이지 링크 -->
+            <a id="official-link" href="#" target="_blank">🏠 공식 홈페이지</a>
+            
+            <!-- 연예인 사진 -->
+            <img id="celeb-photo" src="" alt="연예인 사진">
+            
+            <!-- 사진 아래 간단 프로필 -->
+            <div id="profile-desc"></div>
+        </div>
+    </div>
+
+    <script>
+        async function searchPhoto() {
+            const nameInput = document.getElementById('celeb-name').value.trim();
+            const messageEl = document.getElementById('message');
+            const photoEl = document.getElementById('celeb-photo');
+            const linkEl = document.getElementById('official-link');
+            const profileEl = document.getElementById('profile-desc');
+
+            if (!nameInput) {
+                alert('연예인 이름을 입력해주세요.');
+                return;
+            }
+
+            // 초기화 및 로딩 상태
+            messageEl.textContent = '정보를 검색 중입니다...';
+            messageEl.className = 'loading';
+            photoEl.style.display = 'none';
+            linkEl.style.display = 'none';
+            profileEl.style.display = 'none';
+
+            try {
+                // 1. 한국어 위키백과 API 호출 (이미지, 요약 텍스트, 위키데이터 ID 동시 조회)
+                // prop=pageimages|extracts|pageprops
+                const apiUrl = `https://ko.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(nameInput)}&prop=pageimages|extracts|pageprops&format=json&pithumbsize=500&exchars=300&explaintext=1&origin=*`;
+                
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+                
+                const pages = data.query.pages;
+                const pageId = Object.keys(pages)[0];
+                
+                if (pageId === '-1') {
+                    messageEl.innerHTML = `'${nameInput}'에 대한 문서를<br>찾을 수 없습니다.`;
+                    messageEl.className = 'error';
+                    return;
+                } 
+
+                const pageData = pages[pageId];
+                messageEl.textContent = ''; // 메시지 영역 숨김
+
+                // (1) 사진 표시
+                if (pageData.thumbnail) {
+                    photoEl.src = pageData.thumbnail.source;
+                    photoEl.alt = `${nameInput} 사진`;
+                    photoEl.style.display = 'block';
+                } else {
+                    messageEl.innerHTML = `사진이 등록되어 있지 않습니다.`;
+                    messageEl.className = 'message';
+                }
+
+                // (2) 간단 프로필(요약 텍스트) 표시
+                if (pageData.extract) {
+                    profileEl.textContent = pageData.extract;
+                    profileEl.style.display = 'block';
+                }
+
+                // (3) 공식 홈페이지 링크 가져오기 (위키데이터 활용)
+                if (pageData.pageprops && pageData.pageprops.wikibase_item) {
+                    const wikidataId = pageData.pageprops.wikibase_item;
+                    // Wikidata P856 (공식 웹사이트) 속성 조회
+                    const wikidataUrl = `https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=${wikidataId}&property=P856&format=json&origin=*`;
+                    
+                    try {
+                        const wdResponse = await fetch(wikidataUrl);
+                        const wdData = await wdResponse.json();
+                        
+                        if (wdData.claims && wdData.claims.P856 && wdData.claims.P856.length > 0) {
+                            const officialUrl = wdData.claims.P856[0].mainsnak.datavalue.value;
+                            linkEl.href = officialUrl;
+                            linkEl.style.display = 'inline-block';
+                        }
+                    } catch (wdError) {
+                        console.error('위키데이터 조회 실패:', wdError);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                messageEl.textContent = '검색 중 오류가 발생했습니다.';
+                messageEl.className = 'error';
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                searchPhoto();
+            }
+        }
+    </script>
+</body>
+</html>

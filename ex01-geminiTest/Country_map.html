@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive World Map - 100 Countries</title>
+    
+    <!-- Tailwind CSS 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- D3.js 로드 (지도 시각화용) -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    
+    <!-- Google Fonts (Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome (아이콘용) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Tailwind gray-100 */
+            margin: 0;
+            overflow: hidden; /* 전체 화면 스크롤 방지 */
+        }
+
+        /* D3 Map SVG 스타일 */
+        #map-svg {
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+        #map-svg:active {
+            cursor: grabbing;
+        }
+
+        /* 국가 Path 스타일 */
+        .country {
+            transition: fill 0.2s ease, stroke-width 0.2s ease;
+            outline: none;
+        }
+        .country.active-hover {
+            fill: #3b82f6; /* hover 시 파란색 */
+            cursor: pointer;
+        }
+        .country.selected {
+            fill: #2563eb !important; /* 선택 시 진한 파란색 */
+            stroke: #ffffff;
+            stroke-width: 1.5px;
+        }
+
+        /* D3 툴팁 스타일 */
+        #tooltip {
+            position: absolute;
+            opacity: 0;
+            background: rgba(17, 24, 39, 0.9); /* gray-900 */
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            pointer-events: none;
+            font-size: 0.875rem;
+            font-weight: 600;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: opacity 0.2s ease;
+            z-index: 50;
+            white-space: nowrap;
+        }
+
+        /* 정보 패널 트랜지션 */
+        .fade-in {
+            animation: fadeIn 0.4s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 스크롤바 커스텀 (정보 패널용) */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col md:flex-row">
+
+    <!-- 좌측/상단: 세계 지도 영역 -->
+    <div id="map-container" class="w-full md:w-2/3 h-[50vh] md:h-full bg-blue-50 relative overflow-hidden shadow-inner">
+        <!-- 툴팁 -->
+        <div id="tooltip"></div>
+        
+        <!-- 지도 조작 안내 -->
+        <div class="absolute top-4 left-4 bg-white/80 backdrop-blur px-3 py-2 rounded-lg shadow-sm text-xs font-semibold text-gray-700 pointer-events-none z-10 border border-gray-200">
+            <i class="fa-solid fa-mouse pointer mr-1"></i> 마우스 드래그로 이동, 휠로 확대/축소
+        </div>
+    </div>
+
+    <!-- 우측/하단: 정보 표시 패널 -->
+    <div class="w-full md:w-1/3 h-[50vh] md:h-full bg-white shadow-2xl flex flex-col overflow-y-auto border-l border-gray-200 z-20">
+        <!-- 헤더 -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-5 shadow-md flex-shrink-0">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <i class="fa-solid fa-earth-americas"></i> Global Explorer
+            </h1>
+            <p class="text-blue-100 text-xs mt-1">대표 100개국의 정보를 탐험해보세요.</p>
+        </div>
+
+        <!-- 초기 상태 화면 -->
+        <div id="default-panel" class="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 text-center">
+            <i class="fa-solid fa-map-location-dot text-6xl mb-4 text-gray-200"></i>
+            <h2 class="text-lg font-semibold text-gray-600">지도에서 국가를 선택해주세요</h2>
+            <p class="text-sm mt-2">색칠된 국가에 마우스를 올리면 이름이, <br>클릭하면 상세 정보가 표시됩니다.</p>
+        </div>
+
+        <!-- 국가 정보 표시 화면 (초기엔 숨김) -->
+        <div id="info-panel" class="hidden flex-1 flex-col p-6 fade-in">
+            <!-- 국기 및 국가명 -->
+            <div class="flex items-center gap-4 border-b border-gray-100 pb-4 mb-5">
+                <img id="country-flag" src="" alt="국기" class="w-16 h-12 object-cover rounded shadow-sm border border-gray-200">
+                <div>
+                    <h2 id="country-name" class="text-2xl font-bold text-gray-800 tracking-tight">국가명</h2>
+                    <p id="country-en-name" class="text-sm text-gray-500 uppercase tracking-widest font-semibold">Country</p>
+                </div>
+            </div>
+
+            <!-- 세부 정보 카드 -->
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col items-center text-center">
+                    <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-2 shadow-sm">
+                        <i class="fa-solid fa-building-columns"></i>
+                    </div>
+                    <span class="text-xs text-gray-500 font-semibold mb-1">수도 (Capital)</span>
+                    <span id="country-capital" class="text-sm font-bold text-gray-800 break-keep">수도명</span>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col items-center text-center">
+                    <div class="w-10 h-10 bg-pink-100 text-pink-500 rounded-full flex items-center justify-center mb-2 shadow-sm">
+                        <i class="fa-solid fa-fan"></i>
+                    </div>
+                    <span class="text-xs text-gray-500 font-semibold mb-1">국화 (Flower)</span>
+                    <span id="country-flower" class="text-sm font-bold text-gray-800 break-keep">꽃 이름</span>
+                </div>
+            </div>
+
+            <!-- 관련 이미지 영역 -->
+            <div class="mt-auto">
+                <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                    <i class="fa-regular fa-image"></i> 대표 풍경
+                </h3>
+                <div class="relative w-full h-48 md:h-56 rounded-xl overflow-hidden shadow-md bg-gray-100">
+                    <div id="image-loader" class="absolute inset-0 flex items-center justify-center bg-gray-100">
+                        <i class="fa-solid fa-circle-notch fa-spin text-gray-400 text-2xl"></i>
+                    </div>
+                    <img id="country-image" src="" alt="국가 관련 이미지" class="w-full h-full object-cover opacity-0 transition-opacity duration-500" onload="this.style.opacity=1; document.getElementById('image-loader').style.display='none';" onerror="this.src='https://placehold.co/600x400/f3f4f6/9ca3af?text=Image+Not+Found'; this.style.opacity=1; document.getElementById('image-loader').style.display='none';">
+                </div>
+                <p class="text-[10px] text-gray-400 mt-2 text-right">* 이미지는 랜덤으로 생성된 풍경입니다.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 데이터 구조: ISO3: [한국어 국명, 영문 국명, 수도, 국화, ISO2(국기용)]
+        // 대륙별 주요 100개국 엄선 데이터
+        const countryDataRaw = {
+            // 아시아 (29)
+            "KOR": ["대한민국", "South Korea", "서울", "무궁화", "kr"],
+            "PRK": ["조선민주주의인민공화국", "North Korea", "평양", "목란", "kp"],
+            "JPN": ["일본", "Japan", "도쿄", "벚꽃, 국화", "jp"],
+            "CHN": ["중국", "China", "베이징", "모란 (비공식)", "cn"],
+            "TWN": ["대만", "Taiwan", "타이베이", "매화", "tw"],
+            "MNG": ["몽골", "Mongolia", "울란바토르", "스카비오사", "mn"],
+            "VNM": ["베트남", "Vietnam", "하노이", "연꽃", "vn"],
+            "THA": ["태국", "Thailand", "방콕", "수련", "th"],
+            "MYS": ["말레이시아", "Malaysia", "쿠알라룸푸르", "히비스커스", "my"],
+            "IDN": ["인도네시아", "Indonesia", "자카르타", "멜라티 푸티(자스민)", "id"],
+            "PHL": ["필리핀", "Philippines", "마닐라", "삼파귀타", "ph"],
+            "SGP": ["싱가포르", "Singapore", "싱가포르", "반다 미스 조아킴(난초)", "sg"],
+            "IND": ["인도", "India", "뉴델리", "연꽃", "in"],
+            "PAK": ["파키스탄", "Pakistan", "이슬라마바드", "자스민", "pk"],
+            "BGD": ["방글라데시", "Bangladesh", "다카", "수련", "bd"],
+            "LKA": ["스리랑카", "Sri Lanka", "콜롬보", "수련", "lk"],
+            "NPL": ["네팔", "Nepal", "카트만두", "랄리구라스(만병초)", "np"],
+            "MMR": ["미얀마", "Myanmar", "네피도", "파다욱", "mm"],
+            "KHM": ["캄보디아", "Cambodia", "프놈펜", "롬둘", "kh"],
+            "LAO": ["라오스", "Laos", "비엔티안", "독 참파", "la"],
+            "UZB": ["우즈베키스탄", "Uzbekistan", "타슈켄트", "목화", "uz"],
+            "KAZ": ["카자흐스탄", "Kazakhstan", "아스타나", "튤립", "kz"],
+            "IRN": ["이란", "Iran", "테헤란", "장미", "ir"],
+            "IRQ": ["이라크", "Iraq", "바그다드", "장미", "iq"],
+            "SAU": ["사우디아라비아", "Saudi Arabia", "리야드", "아라비아 자스민", "sa"],
+            "ARE": ["아랍에미리트", "United Arab Emirates", "아부다비", "트리블러스 (야생화)", "ae"],
+            "ISR": ["이스라엘", "Israel", "예루살렘", "시클라멘", "il"],
+            "SYR": ["시리아", "Syria", "다마스쿠스", "다마스크 장미", "sy"],
+            "TUR": ["튀르키예", "Turkey", "앙카라", "튤립", "tr"],
+
+            // 유럽 (26)
+            "GBR": ["영국", "United Kingdom", "런던", "튜더 장미", "gb"],
+            "FRA": ["프랑스", "France", "파리", "아이리스 (백합문장)", "fr"],
+            "DEU": ["독일", "Germany", "베를린", "수레국화", "de"],
+            "ITA": ["이탈리아", "Italy", "로마", "데이지, 백합", "it"],
+            "ESP": ["스페인", "Spain", "마드리드", "카네이션", "es"],
+            "PRT": ["포르투갈", "Portugal", "리스본", "라벤더", "pt"],
+            "NLD": ["네덜란드", "Netherlands", "암스테르담", "튤립", "nl"],
+            "BEL": ["벨기에", "Belgium", "브뤼셀", "붉은 양귀비", "be"],
+            "CHE": ["스위스", "Switzerland", "베른", "에델바이스", "ch"],
+            "AUT": ["오스트리아", "Austria", "빈", "에델바이스", "at"],
+            "GRC": ["그리스", "Greece", "아테네", "제비꽃, 올리브", "gr"],
+            "SWE": ["스웨덴", "Sweden", "스톡홀름", "린네풀", "se"],
+            "NOR": ["노르웨이", "Norway", "오슬로", "헤더", "no"],
+            "FIN": ["핀란드", "Finland", "헬싱키", "은방울꽃", "fi"],
+            "DNK": ["덴마크", "Denmark", "코펜하겐", "마거리트", "dk"],
+            "POL": ["폴란드", "Poland", "바르샤바", "붉은 양귀비", "pl"],
+            "CZE": ["체코", "Czech Republic", "프라하", "보리수나무 꽃", "cz"],
+            "HUN": ["헝가리", "Hungary", "부다페스트", "튤립", "hu"],
+            "ROU": ["루마니아", "Romania", "부쿠레슈티", "모란", "ro"],
+            "BGR": ["불가리아", "Bulgaria", "소피아", "장미", "bg"],
+            "UKR": ["우크라이나", "Ukraine", "키이우", "해바라기", "ua"],
+            "RUS": ["러시아", "Russia", "모스크바", "캐모마일", "ru"],
+            "IRL": ["아일랜드", "Ireland", "더블린", "토끼풀 (Shamrock)", "ie"],
+            "ISL": ["아이슬란드", "Iceland", "레이캬비크", "마운틴 아벤스", "is"],
+            "HRV": ["크로아티아", "Croatia", "자그레브", "아이리스", "hr"],
+            "SRB": ["세르비아", "Serbia", "베오그라드", "자두꽃", "rs"],
+
+            // 아메리카 (19)
+            "USA": ["미국", "United States", "워싱턴 D.C.", "장미", "us"],
+            "CAN": ["캐나다", "Canada", "오타와", "단풍나무", "ca"],
+            "MEX": ["멕시코", "Mexico", "멕시코시티", "달리아", "mx"],
+            "CUB": ["쿠바", "Cuba", "아바나", "마리포사", "cu"],
+            "JAM": ["자메이카", "Jamaica", "킹스턴", "리그넘 비테", "jm"],
+            "DOM": ["도미니카 공화국", "Dominican Republic", "산토도밍고", "마호가니 꽃", "do"],
+            "GTM": ["과테말라", "Guatemala", "과테말라시티", "몽하 블랑카", "gt"],
+            "PAN": ["파나마", "Panama", "파나마시티", "성령의 난초", "pa"],
+            "BRA": ["브라질", "Brazil", "브라질리아", "이페 (트럼펫 트리)", "br"],
+            "ARG": ["아르헨티나", "Argentina", "부에노스아이레스", "세이보", "ar"],
+            "CHL": ["칠레", "Chile", "산티아고", "코피우에", "cl"],
+            "COL": ["콜롬비아", "Colombia", "보고타", "카틀레야 트리나에(난초)", "co"],
+            "PER": ["페루", "Peru", "리마", "칸투타", "pe"],
+            "VEN": ["베네수엘라", "Venezuela", "카라카스", "플로르 데 마요", "ve"],
+            "URY": ["우루과이", "Uruguay", "몬테비데오", "세이보", "uy"],
+            "PRY": ["파라과이", "Paraguay", "아순시온", "음부르쿠야 (시계꽃)", "py"],
+            "ECU": ["에콰도르", "Ecuador", "키토", "장미, 난초", "ec"],
+            "BOL": ["볼리비아", "Bolivia", "수크레/라파스", "칸투타, 파투후", "bo"],
+            "CRI": ["코스타리카", "Costa Rica", "산호세", "과리아 모라다(난초)", "cr"],
+
+            // 아프리카 (22)
+            "EGY": ["이집트", "Egypt", "카이로", "청수련", "eg"],
+            "ZAF": ["남아프리카 공화국", "South Africa", "프리토리아 등", "킹 프로테아", "za"],
+            "NGA": ["나이지리아", "Nigeria", "아부자", "코스투스 스펙타빌리스", "ng"],
+            "KEN": ["케냐", "Kenya", "나이로비", "아프리카 난초", "ke"],
+            "ETH": ["에티오피아", "Ethiopia", "아디스아바바", "칼라 릴리", "et"],
+            "MAR": ["모로코", "Morocco", "라바트", "장미", "ma"],
+            "DZA": ["알제리", "Algeria", "알제", "아이리스", "dz"],
+            "TUN": ["튀니지", "Tunisia", "튀니스", "자스민", "tn"],
+            "SDN": ["수단", "Sudan", "하르툼", "히비스커스", "sd"],
+            "TZA": ["탄자니아", "Tanzania", "도도마", "우삼바라 바이올렛", "tz"],
+            "UGA": ["우간다", "Uganda", "캄팔라", "로부스타 커피 꽃", "ug"],
+            "GHA": ["가나", "Ghana", "아크라", "아프리카 튤립 나무", "gh"],
+            "CIV": ["코트디부아르", "Ivory Coast", "야무수크로", "야자수", "ci"],
+            "CMR": ["카메룬", "Cameroon", "야운데", "레드 버드 오브 파라다이스", "cm"],
+            "SEN": ["세네갈", "Senegal", "다카르", "바오밥 꽃", "sn"],
+            "AGO": ["앙골라", "Angola", "루안다", "웰위치아", "ao"],
+            "MOZ": ["모잠비크", "Mozambique", "마푸투", "부겐빌레아", "mz"],
+            "ZWE": ["짐바브웨", "Zimbabwe", "하라레", "글로리오사 데이지", "zw"],
+            "MDG": ["마다가스카르", "Madagascar", "안타나나리보", "포인시아나", "mg"],
+            "MLI": ["말리", "Mali", "바마코", "수련", "ml"],
+            "RWA": ["르완다", "Rwanda", "키갈리", "적화초", "rw"],
+            "LBY": ["리비아", "Libya", "트리폴리", "석류꽃", "ly"],
+
+            // 오세아니아 (4)
+            "AUS": ["호주", "Australia", "캔버라", "골든 와틀", "au"],
+            "NZL": ["뉴질랜드", "New Zealand", "웰링턴", "코와이", "nz"],
+            "FJI": ["피지", "Fiji", "수바", "타기마우시아", "fj"],
+            "PNG": ["파푸아뉴기니", "Papua New Guinea", "포트모르즈비", "세픽 블루 오키드", "pg"]
+        };
+
+        // 데이터 파싱용 헬퍼 객체 생성
+        const countryDB = {};
+        for (const [iso3, data] of Object.entries(countryDataRaw)) {
+            countryDB[iso3] = {
+                ko: data[0],
+                en: data[1],
+                capital: data[2],
+                flower: data[3],
+                iso2: data[4],
+            };
+        }
+
+        const mapContainer = document.getElementById('map-container');
+        const width = mapContainer.clientWidth;
+        const height = mapContainer.clientHeight;
+
+        const svg = d3.select("#map-container")
+            .append("svg")
+            .attr("id", "map-svg")
+            .attr("viewBox", `0 0 ${width} ${height}`)
+            .attr("preserveAspectRatio", "xMidYMid meet");
+
+        // 메르카토르 투영법 설정 (세계 지도 표준)
+        const projection = d3.geoMercator()
+            .scale(width / 6.5) // 화면 크기에 비례한 스케일
+            .translate([width / 2, height / 1.5]);
+
+        const path = d3.geoPath().projection(projection);
+        
+        // 줌 및 드래그 이벤트 설정를 위한 g 태그 생성
+        const g = svg.append("g");
+
+        const zoom = d3.zoom()
+            .scaleExtent([1, 8]) // 최소 1배, 최대 8배 확대
+            .on("zoom", (event) => {
+                g.attr("transform", event.transform);
+            });
+        
+        svg.call(zoom);
+
+        // 툴팁 요소 선택
+        const tooltip = d3.select("#tooltip");
+        let activeCountry = null; // 현재 선택된 국가를 추적
+
+        // 가벼운 세계 지도 TopoJSON/GeoJSON URL (110m 해상도)
+        const geoDataUrl = "https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson";
+
+        d3.json(geoDataUrl).then(function(data) {
+            
+            g.selectAll("path")
+                .data(data.features)
+                .enter()
+                .append("path")
+                .attr("class", "country")
+                .attr("d", path)
+                // DB에 있는 100개 국가는 에메랄드색, 없는 국가는 옅은 회색으로 칠함
+                .attr("fill", d => countryDB[d.id] ? "#6ee7b7" : "#e5e7eb")
+                .attr("stroke", "#ffffff")
+                .attr("stroke-width", 0.5)
+                
+                .on("mouseover", function(event, d) {
+                    // 데이터가 있는 100개 국가만 호버 이벤트 활성화
+                    if (countryDB[d.id]) {
+                        if (activeCountry !== this) {
+                            d3.select(this).classed("active-hover", true);
+                        }
+                        
+                        // 툴팁 위치 및 내용 설정
+                        tooltip.html(`
+                            <div class="flex items-center gap-2">
+                                <img src="https://flagcdn.com/w20/${countryDB[d.id].iso2}.png" alt="flag" class="w-4 h-3 rounded-sm object-cover">
+                                <span>${countryDB[d.id].ko}</span>
+                            </div>
+                        `)
+                        .style("left", (event.pageX + 15) + "px")
+                        .style("top", (event.pageY + 15) + "px")
+                        .style("opacity", 1);
+                    }
+                })
+                .on("mousemove", function(event) {
+                    tooltip.style("left", (event.pageX + 15) + "px")
+                           .style("top", (event.pageY + 15) + "px");
+                })
+                .on("mouseout", function(event, d) {
+                    d3.select(this).classed("active-hover", false);
+                    tooltip.style("opacity", 0);
+                })
+                .on("click", function(event, d) {
+                    if (countryDB[d.id]) {
+                        // 기존 선택 해제
+                        if (activeCountry) {
+                            d3.select(activeCountry).classed("selected", false);
+                        }
+                        // 현재 클릭한 국가 선택 상태로 변경
+                        activeCountry = this;
+                        d3.select(this).classed("selected", true);
+                        
+                        // 패널 업데이트 함수 호출
+                        updateInfoPanel(countryDB[d.id]);
+                    }
+                });
+        }).catch(error => {
+            console.error("Map data loading error:", error);
+            document.getElementById('default-panel').innerHTML = "<p class='text-red-500'>지도 데이터를 불러오는 중 오류가 발생했습니다.</p>";
+        });
+
+        // 우측 패널 정보 업데이트 함수
+        function updateInfoPanel(country) {
+            // 패널 전환 (Default -> Info)
+            document.getElementById('default-panel').classList.add('hidden');
+            const infoPanel = document.getElementById('info-panel');
+            infoPanel.classList.remove('hidden');
+            
+            // 애니메이션 리셋을 위한 꼼수 (재생을 위해 클래스 제거 후 다시 추가)
+            infoPanel.classList.remove('fade-in');
+            void infoPanel.offsetWidth; // DOM Reflow 강제 발생
+            infoPanel.classList.add('fade-in');
+
+            // 텍스트 및 국기 데이터 채우기
+            document.getElementById('country-name').textContent = country.ko;
+            document.getElementById('country-en-name').textContent = country.en;
+            document.getElementById('country-capital').textContent = country.capital;
+            document.getElementById('country-flower').textContent = country.flower;
+            
+            // 국기 이미지 로드 (FlagCDN 사용 - 매우 안정적임)
+            document.getElementById('country-flag').src = `https://flagcdn.com/w320/${country.iso2}.png`;
+            
+            // 관련 풍경 이미지 로드
+            // picsum.photos의 seed 기능을 사용하여 국가 영문명을 시드로 한 랜덤 풍경 이미지를 고정적으로 가져옴
+            const imageEl = document.getElementById('country-image');
+            const loader = document.getElementById('image-loader');
+            
+            // 로딩 스피너 표시, 이미지 투명하게
+            loader.style.display = 'flex';
+            imageEl.style.opacity = '0';
+            
+            // URL 갱신
+            // seed 뒤에 국가명을 넣어 해당 국가 클릭시마다 항상 같은 풍경이 나오도록 설정
+            imageEl.src = `https://picsum.photos/seed/${country.en.replace(/\s+/g, '')}Landscape/600/400`;
+        }
+
+        // 창 크기 변경 시 지도 크기 재설정 로직 (반응형)
+        window.addEventListener('resize', () => {
+            const newWidth = mapContainer.clientWidth;
+            const newHeight = mapContainer.clientHeight;
+            svg.attr("viewBox", `0 0 ${newWidth} ${newHeight}`);
+        });
+
+    </script>
+</body>
+</html>

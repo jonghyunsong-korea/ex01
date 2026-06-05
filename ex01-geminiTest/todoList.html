@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ToDo List App</title>
+    <!-- Tailwind CSS 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 이미지와 유사한 화려한 폴리곤/그라데이션 배경 느낌 구현 */
+        body {
+            background: linear-gradient(135deg, #b030b0 0%, #7232bd 40%, #3095b5 80%, #31a89c 100%);
+            background-attachment: fixed;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* 커스텀 스크롤바 (옵션) */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+
+        /* 체크박스 커스텀 스타일링 */
+        .todo-checkbox {
+            appearance: none;
+            background-color: #fff;
+            margin: 0;
+            font: inherit;
+            color: currentColor;
+            width: 1.15em;
+            height: 1.15em;
+            border: 1px solid #94a3b8;
+            border-radius: 0.15em;
+            display: grid;
+            place-content: center;
+            cursor: pointer;
+        }
+
+        .todo-checkbox::before {
+            content: "";
+            width: 0.65em;
+            height: 0.65em;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em #4b5563;
+            transform-origin: center;
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+
+        .todo-checkbox:checked::before {
+            transform: scale(1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- 메인 앱 컨테이너 -->
+    <div class="bg-white w-full max-w-2xl rounded-sm shadow-2xl p-8 md:p-10">
+        
+        <!-- 타이틀 -->
+        <h1 class="text-4xl font-bold text-center text-gray-800 mb-8 tracking-wide">ToDo List App</h1>
+
+        <!-- 입력 영역 -->
+        <div class="relative mb-8">
+            <!-- 엔터 아이콘 (SVG) -->
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <svg class="w-5 h-5 text-gray-400 transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+                </svg>
+            </div>
+            <!-- 텍스트 인풋 -->
+            <input type="text" id="todo-input" placeholder="Please enter your ToDo List" 
+                   class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-gray-700 text-lg transition-all"
+                   autocomplete="off">
+        </div>
+
+        <!-- 리스트 영역 -->
+        <ul id="todo-list" class="mb-8">
+            <!-- 자바스크립트를 통해 아이템들이 렌더링 됩니다 -->
+        </ul>
+
+        <!-- 하단 컨트롤 영역 -->
+        <div class="flex flex-col sm:flex-row justify-between items-center border-t border-gray-200 pt-5 gap-4">
+            <!-- 완료 카운트 -->
+            <div class="text-gray-800 font-bold text-base">
+                Completed Todos : <span id="completed-count">0</span>
+            </div>
+            <!-- 일괄 삭제 버튼들 -->
+            <div class="flex gap-2">
+                <button id="btn-delete-selected" class="bg-slate-500 hover:bg-slate-600 text-white px-4 py-2 rounded text-sm font-semibold transition-colors duration-200 shadow-sm">
+                    Delete selected
+                </button>
+                <button id="btn-clear-all" class="bg-slate-500 hover:bg-slate-600 text-white px-4 py-2 rounded text-sm font-semibold transition-colors duration-200 shadow-sm">
+                    Clear all
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 초기 데이터 (이미지에 있는 리스트 기본 반영)
+        let todos = [
+            { id: 1, text: "List", completed: false },
+            { id: 2, text: "Exercise", completed: false },
+            { id: 3, text: "Study", completed: false },
+            { id: 4, text: "Shopping", completed: false }
+        ];
+
+        // DOM 요소 캐싱
+        const todoInput = document.getElementById('todo-input');
+        const todoListElement = document.getElementById('todo-list');
+        const completedCountElement = document.getElementById('completed-count');
+        const btnDeleteSelected = document.getElementById('btn-delete-selected');
+        const btnClearAll = document.getElementById('btn-clear-all');
+
+        // 리스트를 화면에 그리는 함수
+        function renderTodos() {
+            todoListElement.innerHTML = ''; // 기존 목록 초기화
+            let completedCount = 0;
+
+            todos.forEach(todo => {
+                if(todo.completed) completedCount++;
+
+                const li = document.createElement('li');
+                li.className = "flex justify-between items-center py-4 border-b border-gray-200 group";
+                
+                // 삭제(휴지통) 아이콘 SVG
+                const trashIcon = `
+                    <svg class="w-6 h-6 text-gray-500 hover:text-red-500 transition-colors cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                `;
+
+                li.innerHTML = `
+                    <div class="flex items-center gap-4">
+                        <input type="checkbox" class="todo-checkbox" ${todo.completed ? 'checked' : ''} onchange="toggleTodo(${todo.id})">
+                        <span class="text-gray-700 text-lg ${todo.completed ? 'line-through text-gray-400' : ''}">${todo.text}</span>
+                    </div>
+                    <div onclick="deleteTodo(${todo.id})" title="Delete">
+                        ${trashIcon}
+                    </div>
+                `;
+                todoListElement.appendChild(li);
+            });
+
+            // 완료된 개수 업데이트
+            completedCountElement.textContent = completedCount;
+        }
+
+        // 할 일 추가
+        function addTodo(text) {
+            if (text.trim() === '') return; // 빈칸 방지
+            const newTodo = {
+                id: Date.now(), // 고유 ID 부여
+                text: text,
+                completed: false
+            };
+            todos.push(newTodo);
+            renderTodos();
+        }
+
+        // 체크박스 토글 (완료/미완료)
+        function toggleTodo(id) {
+            todos = todos.map(todo => 
+                todo.id === id ? { ...todo, completed: !todo.completed } : todo
+            );
+            renderTodos();
+        }
+
+        // 개별 삭제
+        function deleteTodo(id) {
+            todos = todos.filter(todo => todo.id !== id);
+            renderTodos();
+        }
+
+        // 입력창 엔터키 이벤트
+        todoInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                addTodo(this.value);
+                this.value = ''; // 입력창 비우기
+            }
+        });
+
+        // 선택 삭제 (완료된 항목만 삭제)
+        btnDeleteSelected.addEventListener('click', () => {
+            todos = todos.filter(todo => !todo.completed);
+            renderTodos();
+        });
+
+        // 전체 삭제
+        btnClearAll.addEventListener('click', () => {
+            todos = [];
+            renderTodos();
+        });
+
+        // 초기 화면 렌더링
+        renderTodos();
+    </script>
+</body>
+</html>

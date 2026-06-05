@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>세계 지도 국가 정보</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/topojson-client@3"></script>
+    <style>
+        :root {
+            --primary: #4361ee;
+            --bg-color: #f8f9fa;
+            --panel-bg: #ffffff;
+            --text-main: #343a40;
+            --text-muted: #868e96;
+            --border-color: #e9ecef;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            color: var(--text-main);
+        }
+
+        header {
+            background-color: white;
+            padding: 15px 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            z-index: 10;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 22px;
+            color: var(--primary);
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Map Section */
+        .map-container {
+            flex: 2;
+            position: relative;
+            background-color: #e3f2fd; /* 바다 색상 */
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .country {
+            fill: #c8d6e5;
+            stroke: #ffffff;
+            stroke-width: 0.5px;
+            transition: fill 0.2s;
+            cursor: pointer;
+        }
+
+        .country:hover {
+            fill: #ffb703;
+        }
+
+        .country.active {
+            fill: #fb8500;
+            stroke: #023047;
+            stroke-width: 1.5px;
+        }
+
+        .tooltip {
+            position: absolute;
+            background-color: rgba(33, 37, 41, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 20;
+            transform: translate(-50%, -100%);
+            margin-top: -10px;
+            white-space: nowrap;
+        }
+
+        /* Info Panel Section */
+        .info-panel {
+            flex: 1;
+            max-width: 400px;
+            background-color: var(--panel-bg);
+            border-left: 1px solid var(--border-color);
+            padding: 30px;
+            overflow-y: auto;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.03);
+            z-index: 5;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 15px;
+            fill: #ced4da;
+        }
+
+        .country-info {
+            display: none;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .flag-img {
+            width: 100%;
+            height: 200px;
+            object-fit: contain;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 20px;
+            background-color: #f8f9fa;
+        }
+
+        .info-title {
+            font-size: 28px;
+            margin: 0 0 5px 0;
+            font-weight: 700;
+        }
+
+        .info-subtitle {
+            font-size: 16px;
+            color: var(--text-muted);
+            margin: 0 0 25px 0;
+        }
+
+        .info-group {
+            background-color: var(--bg-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .info-row {
+            display: flex;
+            margin-bottom: 15px;
+        }
+
+        .info-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .info-label {
+            width: 80px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .info-value {
+            flex: 1;
+            font-weight: 500;
+        }
+
+        .flower-card {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-top: 15px;
+        }
+
+        .flower-card-header {
+            background-color: #fff3cd;
+            color: #d4a373;
+            padding: 12px 15px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .flower-img-container {
+            width: 100%;
+            height: 200px;
+            background-color: #f8f9fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .flower-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+
+        .loading-text {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .no-data {
+            color: var(--text-muted);
+            font-size: 14px;
+            padding: 20px;
+            text-align: center;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🌍 세계 지도 탐험 (국가, 수도, 국화)</h1>
+    </header>
+
+    <div class="main-content">
+        <div class="map-container" id="map-container">
+            <div class="tooltip" id="tooltip"></div>
+            <!-- D3 Map will be injected here -->
+        </div>
+        
+        <div class="info-panel">
+            <div class="empty-state" id="empty-state">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg>
+                <p>지도에서 국가를 클릭하면<br>상세 정보가 표시됩니다.</p>
+            </div>
+
+            <div class="country-info" id="country-info">
+                <img id="panel-flag" class="flag-img" src="" alt="국기">
+                <h2 id="panel-name" class="info-title">국가명</h2>
+                <p id="panel-native-name" class="info-subtitle">현지어 이름</p>
+
+                <div class="info-group">
+                    <div class="info-row">
+                        <div class="info-label">📍 수도</div>
+                        <div class="info-value" id="panel-capital">-</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">👥 인구</div>
+                        <div class="info-value" id="panel-population">-</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">🌐 대륙</div>
+                        <div class="info-value" id="panel-region">-</div>
+                    </div>
+                </div>
+
+                <h3 style="font-size: 18px; margin-bottom: 10px; color: var(--text-main);">🌸 국화 (National Flower)</h3>
+                
+                <div id="flower-content">
+                    <div class="flower-card">
+                        <div class="flower-card-header" id="flower-name-header">
+                            🌼 <span>로딩중...</span>
+                        </div>
+                        <div class="flower-img-container">
+                            <span class="loading-text" id="flower-loading">이미지 검색 중...</span>
+                            <img id="flower-img" class="flower-img" src="" alt="국화 이미지">
+                        </div>
+                    </div>
+                </div>
+                <div id="flower-no-data" class="no-data" style="display: none;">
+                    해당 국가의 국화 정보가 등록되어 있지 않습니다.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 대표적인 국가들의 국화 매핑 (REST Countries의 cca3 코드 기준)
+        const nationalFlowers = {
+            "KOR": "무궁화", "PRK": "목란", "JPN": "벚꽃", "CHN": "모란", "TWN": "매화",
+            "USA": "장미", "GBR": "장미", "FRA": "백합", "DEU": "수레국화", "ITA": "데이지",
+            "ESP": "카네이션", "PRT": "라벤더", "NLD": "튤립", "CHE": "에델바이스", "AUT": "에델바이스",
+            "SWE": "은방울꽃", "FIN": "은방울꽃", "NOR": "은방울꽃", "DNK": "히스",
+            "RUS": "해바라기", "UKR": "해바라기", "CAN": "단풍나무", "MEX": "다알리아",
+            "BRA": "카틀레야", "ARG": "세이보", "CHL": "다알리아", "COL": "코피우에",
+            "PER": "카틀레야", "VEN": "카틀레야", "AUS": "골든와틀", "NZL": "은고사리",
+            "IND": "연꽃", "VNM": "연꽃", "THA": "수련", "MYS": "하이비스커스",
+            "IDN": "자스민", "PHL": "삼파기타", "SGP": "난초", "KHM": "수련",
+            "EGY": "수련", "ZAF": "프로테아", "NGA": "코스투스", "KEN": "프로테아",
+            "MAR": "수련", "TUR": "튤립", "GRC": "향제비꽃", "IRN": "튤립",
+            "IRQ": "장미", "SAU": "장미", "ISR": "장미", "ARE": "장미",
+            "CUB": "마호가니", "JAM": "나비난초", "CRI": "구아리아 모라다"
+        };
+
+        let countryDataMap = {}; // 숫자 ID를 키로 하는 국가 정보 맵
+        let activeCountryId = null;
+
+        const tooltip = document.getElementById('tooltip');
+        const emptyState = document.getElementById('empty-state');
+        const countryInfo = document.getElementById('country-info');
+
+        // 위키백과 이미지 검색 함수
+        async function fetchFlowerImage(flowerName) {
+            try {
+                const url = `https://ko.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(flowerName)}&prop=pageimages&format=json&pithumbsize=600&origin=*`;
+                const response = await fetch(url);
+                const data = await response.json();
+                const pages = data.query.pages;
+                const pageId = Object.keys(pages)[0];
+                
+                if (pageId !== '-1' && pages[pageId].thumbnail) {
+                    return pages[pageId].thumbnail.source;
+                }
+                return null;
+            } catch (error) {
+                console.error("위키백과 이미지 검색 실패:", error);
+                return null;
+            }
+        }
+
+        // 초기화 함수
+        async function init() {
+            try {
+                // 1. REST Countries 데이터 가져오기
+                const resResponse = await fetch('https://restcountries.com/v3.1/all');
+                const countriesInfo = await resResponse.json();
+                
+                // ccn3(숫자 코드)를 키로 맵핑 생성
+                countriesInfo.forEach(country => {
+                    if (country.ccn3) {
+                        countryDataMap[Number(country.ccn3)] = country;
+                    }
+                });
+
+                // 2. 지도 그리기
+                drawMap();
+            } catch (error) {
+                console.error("데이터 초기화 실패:", error);
+                alert("국가 데이터를 불러오는데 실패했습니다.");
+            }
+        }
+
+        function drawMap() {
+            const container = document.getElementById('map-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            const svg = d3.select("#map-container")
+                .append("svg")
+                .attr("viewBox", `0 0 ${width} ${height}`)
+                .attr("preserveAspectRatio", "xMidYMid meet");
+
+            const g = svg.append("g");
+
+            // 지도 투영법 설정 (자연스러운 비율의 Natural Earth)
+            const projection = d3.geoNaturalEarth1()
+                .scale(width / 5.5)
+                .translate([width / 2, height / 2]);
+
+            const path = d3.geoPath().projection(projection);
+
+            // 줌 및 팬 기능 추가
+            const zoom = d3.zoom()
+                .scaleExtent([1, 8])
+                .on("zoom", (event) => {
+                    g.attr("transform", event.transform);
+                });
+            svg.call(zoom);
+
+            // TopoJSON 세계 지도 데이터 가져오기
+            d3.json("https://unpkg.com/world-atlas@2.0.2/countries-110m.json").then(world => {
+                const countries = topojson.feature(world, world.objects.countries).features;
+
+                g.selectAll("path")
+                    .data(countries)
+                    .enter().append("path")
+                    .attr("d", path)
+                    .attr("class", "country")
+                    .attr("id", d => `country-${d.id}`)
+                    .on("mouseover", function(event, d) {
+                        const countryData = countryDataMap[Number(d.id)];
+                        const name = countryData && countryData.translations && countryData.translations.kor 
+                                     ? countryData.translations.kor.common 
+                                     : (d.properties.name || "알 수 없음");
+                        
+                        tooltip.innerHTML = name;
+                        tooltip.style.opacity = 1;
+                        d3.select(this).raise(); // Hover된 요소를 맨 위로 (테두리 부각)
+                    })
+                    .on("mousemove", function(event) {
+                        tooltip.style.left = (event.pageX) + "px";
+                        tooltip.style.top = (event.pageY) + "px";
+                    })
+                    .on("mouseout", function() {
+                        tooltip.style.opacity = 0;
+                    })
+                    .on("click", function(event, d) {
+                        // 선택 활성화 UI 처리
+                        g.selectAll(".country").classed("active", false);
+                        d3.select(this).classed("active", true);
+                        
+                        showCountryInfo(Number(d.id));
+                    });
+            });
+        }
+
+        async function showCountryInfo(numericId) {
+            const country = countryDataMap[numericId];
+            
+            if (!country) {
+                alert("해당 국가의 상세 정보가 없습니다.");
+                return;
+            }
+
+            // UI 전환
+            emptyState.style.display = 'none';
+            countryInfo.style.display = 'block';
+
+            // 기본 정보 채우기
+            document.getElementById('panel-flag').src = country.flags.svg;
+            document.getElementById('panel-name').textContent = country.translations?.kor?.common || country.name.common;
+            document.getElementById('panel-native-name').textContent = country.name.official;
+            document.getElementById('panel-capital').textContent = country.capital ? country.capital[0] : "없음";
+            document.getElementById('panel-population').textContent = country.population.toLocaleString() + " 명";
+            document.getElementById('panel-region').textContent = `${country.region} (${country.subregion || ''})`;
+
+            // 국화 정보 처리
+            const cca3 = country.cca3;
+            const flowerName = nationalFlowers[cca3];
+            
+            const flowerContent = document.getElementById('flower-content');
+            const flowerNoData = document.getElementById('flower-no-data');
+            const flowerImg = document.getElementById('flower-img');
+            const flowerLoading = document.getElementById('flower-loading');
+            const flowerNameHeader = document.querySelector('#flower-name-header span');
+
+            if (flowerName) {
+                flowerContent.style.display = 'block';
+                flowerNoData.style.display = 'none';
+                flowerNameHeader.textContent = flowerName;
+                
+                // 이미지 초기화 및 로딩 표시
+                flowerImg.style.display = 'none';
+                flowerLoading.style.display = 'block';
+                flowerLoading.textContent = '이미지 검색 중...';
+
+                // 위키백과 이미지 호출
+                const imgUrl = await fetchFlowerImage(flowerName);
+                
+                if (imgUrl) {
+                    flowerImg.src = imgUrl;
+                    flowerImg.onload = () => {
+                        flowerImg.style.display = 'block';
+                        flowerLoading.style.display = 'none';
+                    };
+                } else {
+                    flowerLoading.textContent = '제공된 이미지가 없습니다.';
+                }
+
+            } else {
+                // 국화 정보가 없는 경우
+                flowerContent.style.display = 'none';
+                flowerNoData.style.display = 'block';
+            }
+        }
+
+        // 앱 시작
+        init();
+    </script>
+</body>
+</html>

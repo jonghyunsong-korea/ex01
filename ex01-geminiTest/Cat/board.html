@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>게시판 - MintCat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="logo">
+            <a href="index.html">🐱 MintCat</a>
+        </div>
+        <nav>
+            <ul class="nav-links">
+                <li><a href="index.html">홈</a></li>
+                <li><a href="board.html">고양이 게시판</a></li>
+            </ul>
+        </nav>
+        <div class="auth-links">
+            <a href="login.html">로그인</a>
+        </div>
+    </header>
+
+    <main class="container board-container">
+        <h2 class="section-title">고양이 방명록</h2>
+        
+        <div class="board-write">
+            <form id="boardForm">
+                <div class="form-group">
+                    <label for="author">작성자</label>
+                    <input type="text" id="author" required placeholder="이름이나 닉네임을 입력하세요">
+                </div>
+                <div class="form-group">
+                    <label for="content">내용</label>
+                    <textarea id="content" required placeholder="고양이에 대한 귀여운 이야기를 남겨주세요!"></textarea>
+                </div>
+                <button type="submit" class="btn-submit">글 남기기</button>
+            </form>
+        </div>
+
+        <div id="boardList" class="board-list">
+            <!-- 자바스크립트로 게시글이 추가될 영역 -->
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 MintCat. All rights reserved.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
